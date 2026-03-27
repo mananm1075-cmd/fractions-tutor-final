@@ -466,6 +466,153 @@
         }
       ],
       "remediation": null
+    },
+    "68500884-c315-42db-87a3-c66b88b8ea16": {
+      "id": "68500884-c315-42db-87a3-c66b88b8ea16",
+      "name": "Gaurav Khanna",
+      "createdAt": 1774598358391,
+      "mastery": {
+        "KC1": 34,
+        "KC2": 1,
+        "KC3": 20
+      },
+      "current": {
+        "question_id": "KC2_Q4",
+        "hintLevel": 0,
+        "hintsUsed": 0,
+        "attempts": 0
+      },
+      "history": [
+        {
+          "timestamp": 1774598363758,
+          "question_id": "KC1_Q1",
+          "kc": "KC1",
+          "selected_option": "1/2",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 34,
+            "KC2": 1,
+            "KC3": 20
+          }
+        },
+        {
+          "timestamp": 1774598367173,
+          "question_id": "KC2_Q7",
+          "kc": "KC2",
+          "selected_option": [
+            "3/10"
+          ],
+          "correct": false,
+          "misconception": "F004",
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 34,
+            "KC2": 1,
+            "KC3": 20
+          }
+        },
+        {
+          "timestamp": 1774598376253,
+          "question_id": "KC2_Q1",
+          "kc": "KC2",
+          "selected_option": "3/4",
+          "correct": false,
+          "misconception": "F003",
+          "hints_used": 2,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 34,
+            "KC2": 1,
+            "KC3": 20
+          }
+        },
+        {
+          "timestamp": 1774598389757,
+          "question_id": "KC1_Q1",
+          "kc": "KC1",
+          "selected_option": "1/2",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 34,
+            "KC2": 1,
+            "KC3": 20
+          }
+        }
+      ],
+      "remediation": null
+    },
+    "2a62cd7c-c5ea-4dc7-811e-79c2a4c0c08b": {
+      "id": "2a62cd7c-c5ea-4dc7-811e-79c2a4c0c08b",
+      "name": "Gaurav Khanna",
+      "createdAt": 1774599142624,
+      "mastery": {
+        "KC1": 26,
+        "KC2": 20,
+        "KC3": 1
+      },
+      "current": {
+        "question_id": "KC3_Q1",
+        "hintLevel": 0,
+        "hintsUsed": 0,
+        "attempts": 0
+      },
+      "history": [
+        {
+          "timestamp": 1774599144869,
+          "question_id": "KC1_Q1",
+          "kc": "KC1",
+          "selected_option": "1/2",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 26,
+            "KC2": 20,
+            "KC3": 1
+          }
+        },
+        {
+          "timestamp": 1774599148930,
+          "question_id": "KC3_Q7",
+          "kc": "KC3",
+          "selected_option": [
+            "5/8"
+          ],
+          "correct": false,
+          "misconception": "F004",
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 26,
+            "KC2": 20,
+            "KC3": 1
+          }
+        },
+        {
+          "timestamp": 1774599160167,
+          "question_id": "KC3_Q1",
+          "kc": "KC3",
+          "selected_option": "Equal",
+          "correct": false,
+          "misconception": "F003",
+          "hints_used": 2,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 26,
+            "KC2": 20,
+            "KC3": 1
+          }
+        }
+      ],
+      "remediation": null
     }
   }
 }

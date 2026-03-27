@@ -20,6 +20,9 @@ const useTutorStore = create((set, get) => ({
   status: "idle",
   error: null,
 
+  // Persistent question attempts storage
+  questionAttempts: {},
+
   startSession: async (name) => {
     set({ status: "loading", error: null });
     const safeName = encodeURIComponent((name || "Student").trim());
@@ -164,7 +167,49 @@ const useTutorStore = create((set, get) => ({
       profile: null,
       status: "idle",
       error: null,
+      questionAttempts: {},
     });
+  },
+
+  // Save question attempt to persistent storage
+  saveQuestionAttempt: (questionId, attemptData) => {
+    const { questionAttempts } = get();
+    const updatedAttempts = {
+      ...questionAttempts,
+      [questionId]: attemptData,
+    };
+    set({ questionAttempts: updatedAttempts });
+    // Save to localStorage
+    try {
+      localStorage.setItem('fractionTutor_attempts', JSON.stringify(updatedAttempts));
+    } catch (e) {
+      console.warn('Could not save attempts to localStorage:', e);
+    }
+  },
+
+  // Load question attempts from localStorage
+  loadQuestionAttempts: () => {
+    try {
+      const saved = localStorage.getItem('fractionTutor_attempts');
+      if (saved) {
+        const attempts = JSON.parse(saved);
+        set({ questionAttempts: attempts });
+        return attempts;
+      }
+    } catch (e) {
+      console.warn('Could not load attempts from localStorage:', e);
+    }
+    return {};
+  },
+
+  // Clear all question attempts
+  clearQuestionAttempts: () => {
+    set({ questionAttempts: {} });
+    try {
+      localStorage.removeItem('fractionTutor_attempts');
+    } catch (e) {
+      console.warn('Could not clear attempts from localStorage:', e);
+    }
   },
 }));
 

@@ -21,6 +21,9 @@ export default function Tutor() {
   const submitAnswerForQuestion = useTutorStore((s) => s.submitAnswerForQuestion);
   const requestHintForQuestion = useTutorStore((s) => s.requestHintForQuestion);
   const setCurrentQuestion = useTutorStore((s) => s.setCurrentQuestion);
+  const saveQuestionAttempt = useTutorStore((s) => s.saveQuestionAttempt);
+  const loadQuestionAttempts = useTutorStore((s) => s.loadQuestionAttempts);
+  const questionAttempts = useTutorStore((s) => s.questionAttempts);
 
   const [questionOrder, setQuestionOrder] = React.useState([]);
   const [questionMap, setQuestionMap] = React.useState({});
@@ -62,14 +65,17 @@ export default function Tutor() {
     };
     if (state.attempted || state.skipped) return;
 
+    const skippedState = {
+      ...(attemptStateByQuestion[activeQuestionId] || { attempted: false, correct: null }),
+      skipped: true,
+    };
     setAttemptStateByQuestion((prev) => ({
       ...prev,
-      [activeQuestionId]: {
-        ...(prev[activeQuestionId] || { attempted: false, correct: null }),
-        skipped: true,
-      },
+      [activeQuestionId]: skippedState,
     }));
-  }, [activeQuestionId, attemptStateByQuestion]);
+    // Save skipped state to persistent storage
+    saveQuestionAttempt(activeQuestionId, skippedState);
+  }, [activeQuestionId, attemptStateByQuestion, saveQuestionAttempt]);
 
   const registerQuestionList = React.useCallback((questions) => {
     const qMap = {};
@@ -98,6 +104,9 @@ export default function Tutor() {
   }, []);
 
   React.useEffect(() => {
+    // Load saved attempts on component mount
+    const savedAttempts = loadQuestionAttempts();
+    
     Promise.all([fetchQuestionsList(), fetchNextQuestion()]).then(([allQuestions]) => {
       registerQuestionList(allQuestions);
       const q = useTutorStore.getState().currentQuestion;
@@ -105,6 +114,11 @@ export default function Tutor() {
         registerQuestion(q, useTutorStore.getState().hintLevel || 1);
       } else if (allQuestions?.length) {
         registerQuestion(allQuestions[0], 1);
+      }
+      
+      // Restore saved attempts to local state
+      if (savedAttempts && Object.keys(savedAttempts).length > 0) {
+        setAttemptStateByQuestion(savedAttempts);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -237,10 +251,13 @@ export default function Tutor() {
                 setSelectedByQuestion((prev) => ({ ...prev, [activeQuestionId]: opt }));
                 try {
                   const data = await submitAnswerForQuestion(activeQuestionId, opt);
+                  const attemptData = { attempted: true, correct: data.correct, skipped: false };
                   setAttemptStateByQuestion((prev) => ({
                     ...prev,
-                    [activeQuestionId]: { attempted: true, correct: data.correct, skipped: false },
+                    [activeQuestionId]: attemptData,
                   }));
+                  // Save to persistent storage
+                  saveQuestionAttempt(activeQuestionId, attemptData);
                   setFeedbackByQuestion((prev) => ({
                     ...prev,
                     [activeQuestionId]: {
