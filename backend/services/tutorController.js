@@ -8,6 +8,15 @@ const { lessons } = require("../data/questions");
 const { updateMastery } = require("./learnerModel");
 
 const ALL_KCS = ["KC1", "KC2", "KC3", "KC4", "KC5", "KC6", "KC7"];
+const KC_SEQUENTIAL_ROUND_SIZE = 8;
+
+function ensureKcRoundState(student, kc) {
+  if (!student.kcRound) student.kcRound = {};
+  if (!student.kcRound[kc] || !Array.isArray(student.kcRound[kc].completedCorrectIds)) {
+    student.kcRound[kc] = { completedCorrectIds: [] };
+  }
+  return student.kcRound[kc];
+}
 
 function normalizeSelectedOption(selected_option) {
   if (Array.isArray(selected_option)) return selected_option.map((x) => String(x).trim()).sort();
@@ -167,6 +176,76 @@ async function getSessionQueue(req, res) {
   });
 }
 
+// ── kcSequentialNext ──────────────────────────────────────────────────────────
+// One question at a time per KC: adaptive pick after each correct answer; rounds of 8.
+async function getKcSequentialNext(req, res) {
+  const { student_id, kc } = req.query;
+  if (!validateStudentId(student_id)) {
+    return res.status(400).json({ error: "Missing or invalid student_id" });
+  }
+  if (!kc || typeof kc !== "string") {
+    return res.status(400).json({ error: "Missing kc" });
+  }
+
+  const student = getOrCreateStudent(student_id);
+  const round = ensureKcRoundState(student, kc);
+
+  let newRound = false;
+  if (round.completedCorrectIds.length >= KC_SEQUENTIAL_ROUND_SIZE) {
+    newRound = true;
+    round.completedCorrectIds = [];
+  }
+
+  const remediation =
+    student.remediation && student.remediation.kc === kc ? student.remediation : null;
+
+  const question = chooseNextQuestion({
+    mastery: student.mastery,
+    answeredQuestionIds: [],
+    questions,
+    history: student.history || [],
+    remediation,
+    activeKC: kc,
+    poolExcludeIds: round.completedCorrectIds,
+  });
+
+  if (!question) {
+    return res.status(404).json({ error: "No questions found for this KC" });
+  }
+
+  student.current = {
+    question_id: question.id,
+    hintLevel: 0,
+    hintsUsed: 0,
+    attempts: 0,
+    startedAt: Date.now(),
+  };
+  student.remediation = null;
+  persist();
+
+  res.json({
+    question: {
+      id: question.id,
+      prompt: question.prompt,
+      visual: question.visual,
+      visual2: question.visual2 || null,
+      type: question.type || "mcq",
+      kc: question.kc,
+      difficulty: question.difficulty,
+      explanationCorrect: question.explanationCorrect,
+      options: question.options,
+      statement: question.statement || null,
+    },
+    hintLevel: 0,
+    progress: {
+      number: round.completedCorrectIds.length + 1,
+      total: KC_SEQUENTIAL_ROUND_SIZE,
+      completedCorrectInRound: round.completedCorrectIds.length,
+    },
+    meta: { newRound },
+  });
+}
+
 function evaluateQuestionAnswer(question, normalized) {
   const type = question.type || "mcq";
   if (type === "fill_blank") {
@@ -200,7 +279,7 @@ function recommendationFromMastery(mastery) {
 
 // ── submitAnswer ──────────────────────────────────────────────────────────────
 async function submitAnswer(req, res) {
-  const { student_id, question_id, selected_option, time_taken } = req.body || {};
+  const { student_id, question_id, selected_option, time_taken, skip_kc_round } = req.body || {};
   if (!validateStudentId(student_id)) {
     return res.status(400).json({ error: "Missing or invalid student_id" });
   }
@@ -312,6 +391,13 @@ async function submitAnswer(req, res) {
     }
   }
 
+  if (correct && question.kc && !skip_kc_round) {
+    const round = ensureKcRoundState(student, question.kc);
+    if (!round.completedCorrectIds.includes(question_id)) {
+      round.completedCorrectIds.push(question_id);
+    }
+  }
+
   persist();
 
   // Response-time feedback string
@@ -344,8 +430,8 @@ async function submitAnswer(req, res) {
         ? "Try to explain why your answer is correct before moving on."
         : "Use the hint ladder and compare part-to-whole carefully before your next attempt.",
       nextStep: correct
-        ? "Move to the next question or revisit an unattempted one from the left panel."
-        : "Revisit this concept with hints, then attempt another related question.",
+        ? "Use Next question to continue — difficulty adapts from your recent answers."
+        : "Try again, or use a hint before you answer again.",
       masteryImpact: `Mastery change on ${question.kc}: ${masteryDelta >= 0 ? "+" : ""}${masteryDelta}`,
     },
   });
@@ -399,11 +485,17 @@ async function getProgress(req, res) {
   const chart = ALL_KCS.map((kc) => {
     const kcHistory = history.filter((h) => h.kc === kc);
     const correct = kcHistory.filter((h) => h.correct).length;
+    const masteryVal = student.mastery?.[kc] || 0;
+    const accuracyPct = kcHistory.length ? Math.round((correct / kcHistory.length) * 100) : 0;
+    const avgProgressScore = kcHistory.length
+      ? Math.round((masteryVal + accuracyPct) / 2)
+      : masteryVal;
     return {
       kc,
-      mastery: student.mastery?.[kc] || 0,
+      mastery: masteryVal,
       attempts: kcHistory.length,
-      accuracy: kcHistory.length ? Math.round((correct / kcHistory.length) * 100) : 0,
+      accuracy: accuracyPct,
+      avgProgressScore,
       hints: kcHistory.reduce((s, h) => s + (h.hints_used || 0), 0),
     };
   });
@@ -418,6 +510,7 @@ async function getProgress(req, res) {
     recommendation: recommendationFromMastery(student.mastery),
     chart,
     questionStates: student.questionStates || {},
+    lessonsViewed: student.lessonsViewed || [],
     metrics: student.metrics || {},
   });
 }
@@ -485,6 +578,7 @@ module.exports = {
   nextQuestion,
   guidedQuestion,
   getSessionQueue,
+  getKcSequentialNext,
   submitAnswer,
   getHint,
   getProgress,

@@ -4,6 +4,7 @@ const {
   nextQuestion,
   guidedQuestion,
   getSessionQueue,
+  getKcSequentialNext,
   submitAnswer,
   getHint,
   getProgress,
@@ -19,6 +20,7 @@ router.get("/start-session", startSession);
 router.get("/next-question", nextQuestion);
 router.get("/guided-question", guidedQuestion);
 router.get("/session-queue", getSessionQueue);
+router.get("/kc-sequential-next", getKcSequentialNext);
 router.post("/submit-answer", submitAnswer);
 router.get("/hint", getHint);
 router.get("/progress", getProgress);

@@ -6,8 +6,23 @@ import { motion } from "framer-motion";
 export default function Home() {
   const navigate = useNavigate();
   const startSession = useTutorStore((s) => s.startSession);
+  const restoreSessionFromStorage = useTutorStore((s) => s.restoreSessionFromStorage);
   const status = useTutorStore((s) => s.status);
-  const [name, setName] = React.useState("");
+  const [name, setName] = React.useState(() => {
+    try {
+      const raw = localStorage.getItem("fractions-tutor-session");
+      if (!raw) return "";
+      const p = JSON.parse(raw);
+      return typeof p?.name === "string" ? p.name : "";
+    } catch {
+      return "";
+    }
+  });
+  const [savedPreview, setSavedPreview] = React.useState(null);
+
+  React.useEffect(() => {
+    setSavedPreview(useTutorStore.getState().getSavedSessionPreview());
+  }, []);
 
   return (
     <div className="min-h-full bg-gradient-to-b from-indigo-50 to-white">
@@ -38,7 +53,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
             <motion.button
               type="button"
               className="rounded-2xl bg-indigo-600 px-5 py-3 text-white font-bold shadow-sm hover:bg-indigo-700 transition"
@@ -52,8 +67,23 @@ export default function Home() {
             >
               {status === "loading" ? "Starting..." : "Start Learning"}
             </motion.button>
+            {savedPreview ? (
+              <motion.button
+                type="button"
+                className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-5 py-3 text-indigo-800 font-bold shadow-sm hover:bg-indigo-100 transition"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={async () => {
+                  const ok = await restoreSessionFromStorage();
+                  if (ok) navigate("/tutor");
+                }}
+                disabled={status === "loading"}
+              >
+                Continue as {savedPreview.name}
+              </motion.button>
+            ) : null}
             <div className="text-sm text-slate-500">
-              Works locally with Node/Express + React/Vite.
+              Progress is saved by name in the local database. Same name loads your history.
             </div>
           </div>
         </motion.div>

@@ -56,6 +56,8 @@ function createStudent(student_id, initial) {
     lessonsViewed: [],
     // Per-KC session queues (which 8 questions were selected this session)
     sessionQueues: {},
+    // Per-KC sequential rounds: question IDs answered correctly in the current round of 8
+    kcRound: {},
   };
 }
 
@@ -72,10 +74,16 @@ function migrateStudent(s) {
   }
   if (!s.lessonsViewed) s.lessonsViewed = [];
   if (!s.sessionQueues) s.sessionQueues = {};
+  if (!s.kcRound || typeof s.kcRound !== "object") s.kcRound = {};
   // Ensure all KCs exist in mastery
   const allKCs = ["KC1", "KC2", "KC3", "KC4", "KC5", "KC6", "KC7"];
   for (const kc of allKCs) {
     if (typeof s.mastery[kc] !== "number") s.mastery[kc] = 0;
+  }
+  // Unpracticed KCs should stay at 0% (fixes legacy rows that stored a fake default like 20).
+  const attemptedKcs = new Set((s.history || []).map((h) => h.kc).filter(Boolean));
+  for (const kc of allKCs) {
+    if (!attemptedKcs.has(kc)) s.mastery[kc] = 0;
   }
 }
 

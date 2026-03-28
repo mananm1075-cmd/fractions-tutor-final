@@ -18,15 +18,29 @@ function buildSessionQueue({ kc, allQuestions, history = [], mastery = {}, metri
   const unanswered = kcPool.filter((q) => !correctIds.has(q.id));
   const pool = unanswered.length >= SESSION_SIZE ? unanswered : kcPool;
 
-  // ── Response Time Signal ────────────────────────────────────────────────
-  // Compute avg time for recent KC answers
+  // ── Response time + accuracy signal (recent attempts, last answer weighted) ─
   const recentKcHistory = (history || []).filter((h) => h.kc === kc).slice(-5);
   let timeSignal = 0; // -1 = push easier, 0 = neutral, +1 = push harder
 
+  function resolveTimeMs(h) {
+    if (typeof h.time_taken === "number" && h.time_taken > 0) return h.time_taken;
+    const fromMetrics = metrics?.time_taken_per_question?.[h.question_id];
+    return typeof fromMetrics === "number" && fromMetrics > 0 ? fromMetrics : null;
+  }
+
+  if (recentKcHistory.length >= 1) {
+    const last = recentKcHistory[recentKcHistory.length - 1];
+    const lastTime = resolveTimeMs(last);
+    if (lastTime != null) {
+      const lastSec = lastTime / 1000;
+      if (last.correct && lastSec < 18) timeSignal = 1;
+      if (!last.correct && lastSec > 42) timeSignal = -1;
+    }
+  }
   if (recentKcHistory.length >= 3) {
     const timings = recentKcHistory.map((h) => ({
       correct: h.correct,
-      time: metrics?.time_taken_per_question?.[h.question_id] || null,
+      time: resolveTimeMs(h),
     }));
     const fastCorrect = timings.filter((t) => t.correct && t.time !== null && t.time < 15000);
     const slowWrong = timings.filter((t) => !t.correct && t.time !== null && t.time > 45000);

@@ -23,6 +23,16 @@ function kcStats(history, kc) {
   };
 }
 
+/** Last attempt on this KC drives immediate pacing (blend with rolling stats in chooseNextQuestion). */
+function lastAttemptPace(history, kc) {
+  const kcHistory = (history || []).filter((h) => h.kc === kc);
+  const last = kcHistory[kcHistory.length - 1];
+  if (!last) return null;
+  const t = last.time_taken;
+  const timeMs = typeof t === "number" && t > 0 ? t : null;
+  return { correct: Boolean(last.correct), timeMs, hintsUsed: last.hints_used || 0, attempts: last.attempts || 1 };
+}
+
 const ALL_KCS = ["KC1", "KC2", "KC3", "KC4", "KC5", "KC6", "KC7"];
 
 function selectTargetKC({ mastery, history }) {
@@ -47,6 +57,8 @@ function chooseNextQuestion({
   history = [],
   remediation = null,
   activeKC = null,
+  /** When set (e.g. KC sequential practice), only exclude these IDs from the pool for this pick. */
+  poolExcludeIds = null,
 }) {
   const targetKC = activeKC || remediation?.kc || selectTargetKC({ mastery, history });
   const kcCandidates = questions.filter((q) => q.kc === targetKC);
@@ -54,12 +66,34 @@ function chooseNextQuestion({
     ? kcCandidates.filter((q) => (q.remediationTags || []).includes(remediation.code))
     : kcCandidates;
 
-  const unattempted = candidates.filter((q) => !answeredQuestionIds.includes(q.id));
-  const pool =
-    unattempted.length > 0 ? unattempted : candidates.length > 0 ? candidates : kcCandidates;
+  let pool;
+  if (poolExcludeIds != null) {
+    const excluded = new Set(poolExcludeIds);
+    pool = candidates.filter((q) => !excluded.has(q.id));
+    if (pool.length === 0) {
+      pool = candidates.length > 0 ? candidates : kcCandidates;
+    }
+  } else {
+    const ids = answeredQuestionIds || [];
+    const unattempted = candidates.filter((q) => !ids.includes(q.id));
+    pool =
+      unattempted.length > 0 ? unattempted : candidates.length > 0 ? candidates : kcCandidates;
+  }
 
   const m = mastery?.[targetKC] ?? 0;
   const stats = kcStats(history, targetKC);
+  const lastPace = lastAttemptPace(history, targetKC);
+
+  // Blend rolling window (recent 5) with last attempt for pace: last answer weights more for "current" adaptation.
+  const lastAcc = lastPace ? (lastPace.correct ? 1 : 0) : null;
+  const blendedAccuracy =
+    lastAcc !== null ? stats.accuracy * 0.35 + lastAcc * 0.65 : stats.accuracy;
+
+  let blendedAvgTimeMs = stats.avgTime;
+  if (lastPace?.timeMs != null) {
+    blendedAvgTimeMs =
+      stats.avgTime != null ? stats.avgTime * 0.4 + lastPace.timeMs * 0.6 : lastPace.timeMs;
+  }
 
   // ── Mastery-based difficulty ──────────────────────────────────────────────
   let targetDifficulty;
@@ -71,24 +105,33 @@ function chooseNextQuestion({
     targetDifficulty = 3;
   }
 
-  // ── Accuracy / hint adjustments ───────────────────────────────────────────
-  if (stats.accuracy < 0.55 || stats.avgHints >= 1.5 || stats.avgAttempts > 1.2) {
+  // ── Accuracy / hint adjustments (blended accuracy + last attempt hints) ─
+  if (blendedAccuracy < 0.55 || stats.avgHints >= 1.5 || stats.avgAttempts > 1.2) {
     targetDifficulty -= 1;
   }
-  if (stats.accuracy > 0.85 && stats.avgHints < 0.8) {
+  if (blendedAccuracy > 0.85 && stats.avgHints < 0.8) {
+    targetDifficulty += 1;
+  }
+  if (lastPace && !lastPace.correct && lastPace.attempts >= 2) {
+    targetDifficulty -= 1;
+  }
+  if (lastPace && lastPace.correct && lastPace.hintsUsed === 0 && lastPace.attempts === 1) {
     targetDifficulty += 1;
   }
 
-  // ── Response time adjustment ──────────────────────────────────────────────
-  if (stats.avgTime !== null) {
-    const avgSec = stats.avgTime / 1000;
-    if (avgSec < 15 && stats.accuracy >= 0.6) {
-      // Fast AND mostly correct → increase difficulty
+  // ── Response time adjustment (blended + last-question seconds) ────────────
+  if (blendedAvgTimeMs !== null && blendedAvgTimeMs > 0) {
+    const avgSec = blendedAvgTimeMs / 1000;
+    if (avgSec < 12 && blendedAccuracy >= 0.65) {
       targetDifficulty += 1;
-    } else if (avgSec > 45 && stats.accuracy < 0.5) {
-      // Slow AND mostly wrong → decrease difficulty
+    } else if (avgSec > 50 && blendedAccuracy < 0.55) {
       targetDifficulty -= 1;
     }
+  }
+  if (lastPace?.timeMs != null) {
+    const sec = lastPace.timeMs / 1000;
+    if (lastPace.correct && sec < 18) targetDifficulty += 1;
+    if (!lastPace.correct && sec > 40) targetDifficulty -= 1;
   }
 
   targetDifficulty = clamp(targetDifficulty, 1, 3);

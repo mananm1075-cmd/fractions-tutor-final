@@ -7,8 +7,12 @@ function getLabel(mastery) {
   return "Proficient";
 }
 
-export default function ProgressBar({ mastery, kc }) {
+export default function ProgressBar({ mastery, kc, avgProgressScore }) {
   const percent = Math.max(0, Math.min(100, Math.round(mastery || 0)));
+  const avg =
+    typeof avgProgressScore === "number"
+      ? Math.max(0, Math.min(100, Math.round(avgProgressScore)))
+      : null;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -24,7 +28,13 @@ export default function ProgressBar({ mastery, kc }) {
           transition={{ duration: 0.5 }}
         />
       </div>
-      <div className="mt-2 text-xs text-slate-500">{percent}%</div>
+      <div className="mt-2 text-xs text-slate-500">Mastery: {percent}%</div>
+      {avg !== null && (
+        <div className="mt-1 text-xs font-semibold text-indigo-600">
+          Avg progress score: {avg}%
+          <span className="ml-1 font-normal text-slate-400">(mastery + accuracy)</span>
+        </div>
+      )}
     </div>
   );
 }

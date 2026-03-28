@@ -36,6 +36,46 @@ function KCTabs({ activeKC, allKCs, kcTitles, onSelect }) {
   );
 }
 
+function ProgressiveQuestionRail({ currentNumber, total }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="text-xs font-semibold text-slate-700 mb-2">
+        {total} questions this round — only the current one is shown; the rest unlock in order.
+      </div>
+      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+        {Array.from({ length: total }, (_, i) => {
+          const n = i + 1;
+          const done = n < currentNumber;
+          const current = n === currentNumber;
+          const locked = n > currentNumber;
+          return (
+            <div
+              key={n}
+              title={
+                locked
+                  ? `Question ${n} — locked until you answer the previous one correctly`
+                  : current
+                    ? `Question ${n} — current`
+                    : `Question ${n} — completed`
+              }
+              className={[
+                "flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold border-2 transition",
+                locked ? "border-slate-200 bg-slate-100 text-slate-400" : "",
+                current ? "border-indigo-500 bg-indigo-100 text-indigo-800 ring-2 ring-indigo-300 scale-110" : "",
+                done ? "border-emerald-400 bg-emerald-100 text-emerald-800" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {done ? "✓" : locked ? "?" : n}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Teaching Phase: Step 1 — Concept Intro ────────────────────────────────────
 function TeachIntro({ lesson, onNext }) {
   if (!lesson) return null;
@@ -152,6 +192,8 @@ function TeachGuided({ lesson, studentId, kc, onComplete }) {
   const [gFeedback, setGFeedback] = React.useState(null);
   const [gAttempted, setGAttempted] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
+  const [questionStartedAt, setQuestionStartedAt] = React.useState(null);
+  const [elapsedSec, setElapsedSec] = React.useState(0);
 
   React.useEffect(() => {
     setLoading(true);
@@ -160,15 +202,31 @@ function TeachGuided({ lesson, studentId, kc, onComplete }) {
       .catch(() => setLoading(false));
   }, [kc]);
 
+  React.useEffect(() => {
+    if (!gQuestion || gAttempted) {
+      setQuestionStartedAt(null);
+      setElapsedSec(0);
+      return;
+    }
+    const t0 = Date.now();
+    setQuestionStartedAt(t0);
+    setElapsedSec(0);
+    const iv = setInterval(() => setElapsedSec(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [gQuestion, gAttempted]);
+
   async function handleSelect(opt) {
     if (gAttempted) return;
     setGSelected(opt);
+    const timeTaken =
+      questionStartedAt != null ? Date.now() - questionStartedAt : null;
     try {
       const data = await api.post("/api/submit-answer", {
         student_id: studentId,
         question_id: gQuestion.id,
         selected_option: opt,
-        time_taken: null,
+        time_taken: timeTaken,
+        skip_kc_round: true,
       });
       setGFeedback(data);
       setGAttempted(true);
@@ -199,6 +257,11 @@ function TeachGuided({ lesson, studentId, kc, onComplete }) {
       <div className="mt-1 text-sm text-slate-500">
         All hints are visible. Take your time and try this question.
       </div>
+      {!gAttempted && gQuestion && (
+        <div className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-mono text-sm font-bold text-slate-700 tabular-nums">
+          ⏱ {formatTime(elapsedSec)}
+        </div>
+      )}
 
       {gQuestion && (
         <>
@@ -259,84 +322,102 @@ function TeachGuided({ lesson, studentId, kc, onComplete }) {
 export default function Tutor() {
   const navigate = useNavigate();
 
-  const name        = useTutorStore((s) => s.name);
-  const student_id  = useTutorStore((s) => s.student_id);
-  const mastery     = useTutorStore((s) => s.mastery);
-  const hintLevel   = useTutorStore((s) => s.hintLevel);
-  const hintTexts   = useTutorStore((s) => s.hintTexts);
-  const feedback    = useTutorStore((s) => s.feedback);
-  const status      = useTutorStore((s) => s.status);
-  const error       = useTutorStore((s) => s.error);
-  const activeKC    = useTutorStore((s) => s.activeKC);
-  const lessonPhase = useTutorStore((s) => s.lessonPhase);
-  const lessons     = useTutorStore((s) => s.lessons);
-  const lessonsViewed    = useTutorStore((s) => s.lessonsViewed);
-  const questionStates   = useTutorStore((s) => s.questionStates);
-  const allQuestions     = useTutorStore((s) => s.allQuestions);
-  const sessionQueue     = useTutorStore((s) => s.sessionQueue);
-  const KC_TITLES        = useTutorStore((s) => s.KC_TITLES);
-  const ALL_KCS          = useTutorStore((s) => s.ALL_KCS);
-  const currentQuestion  = useTutorStore((s) => s.currentQuestion);
+  const name = useTutorStore((s) => s.name);
+  const student_id = useTutorStore((s) => s.student_id);
+  const mastery = useTutorStore((s) => s.mastery);
+  const status = useTutorStore((s) => s.status);
+  const error = useTutorStore((s) => s.error);
+  const activeKC = useTutorStore((s) => s.activeKC);
+  const lessons = useTutorStore((s) => s.lessons);
+  const lessonsViewed = useTutorStore((s) => s.lessonsViewed);
+  const KC_TITLES = useTutorStore((s) => s.KC_TITLES);
+  const ALL_KCS = useTutorStore((s) => s.ALL_KCS);
 
-  const fetchNextQuestion      = useTutorStore((s) => s.fetchNextQuestion);
-  const fetchQuestionsList     = useTutorStore((s) => s.fetchQuestionsList);
-  const fetchLessons           = useTutorStore((s) => s.fetchLessons);
-  const fetchSessionQueue      = useTutorStore((s) => s.fetchSessionQueue);
   const submitAnswerForQuestion = useTutorStore((s) => s.submitAnswerForQuestion);
-  const requestHintForQuestion  = useTutorStore((s) => s.requestHintForQuestion);
-  const setCurrentQuestion     = useTutorStore((s) => s.setCurrentQuestion);
-  const setActiveKC            = useTutorStore((s) => s.setActiveKC);
-  const setLessonPhase         = useTutorStore((s) => s.setLessonPhase);
-  const markLessonViewed       = useTutorStore((s) => s.markLessonViewed);
-  const saveQuestionState      = useTutorStore((s) => s.saveQuestionState);
+  const requestHintForQuestion = useTutorStore((s) => s.requestHintForQuestion);
+  const setCurrentQuestion = useTutorStore((s) => s.setCurrentQuestion);
+  const setActiveKC = useTutorStore((s) => s.setActiveKC);
+  const setLessonPhase = useTutorStore((s) => s.setLessonPhase);
+  const markLessonViewed = useTutorStore((s) => s.markLessonViewed);
+  const fetchProgress = useTutorStore((s) => s.fetchProgress);
+  const fetchLessons = useTutorStore((s) => s.fetchLessons);
 
-  // ── Local UI state ────────────────────────────────────────────────────────
-  const [questionMap, setQuestionMap]       = React.useState({});
-  const [activeQuestionId, setActiveQuestionId] = React.useState(null);
-  const [selectedByQuestion, setSelectedByQuestion]     = React.useState({});
-  const [attemptStateByQuestion, setAttemptStateByQuestion] = React.useState({});
-  const [feedbackByQuestion, setFeedbackByQuestion]     = React.useState({});
-  const [hintsByQuestion, setHintsByQuestion]           = React.useState({});
-  const [hintLoading, setHintLoading] = React.useState(false);
-  const [hintError, setHintError]     = React.useState(null);
+  const [teachStep, setTeachStep] = React.useState(() =>
+    useTutorStore.getState().lessonsViewed.includes("KC1") ? null : "intro"
+  );
+
+  const [seqLoading, setSeqLoading] = React.useState(false);
+  const [seqError, setSeqError] = React.useState(null);
+  const [seqQuestion, setSeqQuestion] = React.useState(null);
+  const [seqProgress, setSeqProgress] = React.useState(null);
+  const [seqMeta, setSeqMeta] = React.useState(null);
+  /** null = can answer; 'wrong' = show retry; 'correct' = show next */
+  const [seqOutcome, setSeqOutcome] = React.useState(null);
+  const [seqFeedback, setSeqFeedback] = React.useState(null);
+  const [seqSelected, setSeqSelected] = React.useState(null);
+
   const [questionStartTime, setQuestionStartTime] = React.useState(null);
-
-  // Teaching phase local state (session only — resets when KC changes)
-  // 'intro' | 'example' | 'guided' | null (null = independent practice)
-  const [teachStep, setTeachStep] = React.useState(null);
-
-  // Live elapsed timer
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  const [frozenSeconds, setFrozenSeconds] = React.useState(null);
 
-  // ── Derived: kcQuestionOrder from session queue ───────────────────────────
-  const kcQuestionOrder = React.useMemo(() => {
-    if (sessionQueue.length > 0) return sessionQueue.map((q) => q.id);
-    return allQuestions.filter((q) => q.kc === activeKC).map((q) => q.id);
-  }, [sessionQueue, allQuestions, activeKC]);
+  const [hintLevel, setHintLevel] = React.useState(0);
+  const [hintTexts, setHintTexts] = React.useState([]);
+  const [hintLoading, setHintLoading] = React.useState(false);
+  const [hintError, setHintError] = React.useState(null);
 
-  const activeQuestion    = activeQuestionId ? questionMap[activeQuestionId] : currentQuestion;
-  const activeFeedback    = activeQuestionId ? feedbackByQuestion[activeQuestionId] || null : feedback;
-  const activeHintState   = activeQuestionId
-    ? hintsByQuestion[activeQuestionId] || { hintLevel: 0, hintTexts: [] }
-    : { hintLevel, hintTexts };
-  const activeAttemptState = activeQuestionId
-    ? attemptStateByQuestion[activeQuestionId] || { attempted: false }
-    : { attempted: false };
+  const seqQuestionId = seqQuestion?.id;
+  const inTeachingPhase = teachStep !== null;
 
-  // ── Progress: correct / total questions in session queue ──────────────────
-  const kcProgress = React.useMemo(() => {
-    const total = kcQuestionOrder.length;
-    if (total === 0) return 0;
-    const correct = kcQuestionOrder.filter(
-      (qid) => attemptStateByQuestion[qid]?.correct === true
-    ).length;
-    return Math.round((correct / total) * 100);
-  }, [kcQuestionOrder, attemptStateByQuestion]);
+  const loadSequentialQuestion = React.useCallback(async () => {
+    if (!student_id || !activeKC) return;
+    setSeqLoading(true);
+    setSeqError(null);
+    try {
+      const d = await api.get(
+        `/api/kc-sequential-next?student_id=${encodeURIComponent(student_id)}&kc=${encodeURIComponent(activeKC)}`
+      );
+      setSeqQuestion(d.question);
+      setSeqProgress(d.progress);
+      setSeqMeta(d.meta || null);
+      setSeqOutcome(null);
+      setSeqFeedback(null);
+      setSeqSelected(null);
+      setHintLevel(0);
+      setHintTexts([]);
+      setCurrentQuestion(d.question);
+      setQuestionStartTime(Date.now());
+      setFrozenSeconds(null);
+    } catch (e) {
+      setSeqError(e.message || "Could not load question.");
+      setSeqQuestion(null);
+    } finally {
+      setSeqLoading(false);
+    }
+  }, [student_id, activeKC, setCurrentQuestion]);
 
-  // ── Elapsed timer ─────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (!questionStartTime || activeAttemptState.attempted || teachStep !== null) {
-      setElapsedSeconds(0);
+    if (student_id) fetchProgress();
+  }, [student_id, fetchProgress]);
+
+  React.useEffect(() => {
+    fetchLessons();
+  }, [fetchLessons]);
+
+  const prevKCRef = React.useRef(activeKC);
+  React.useEffect(() => {
+    if (prevKCRef.current === activeKC) return;
+    prevKCRef.current = activeKC;
+    const isViewed = lessonsViewed.includes(activeKC);
+    setTeachStep(isViewed ? null : "intro");
+  }, [activeKC, lessonsViewed]);
+
+  React.useEffect(() => {
+    if (inTeachingPhase || !student_id) return;
+    loadSequentialQuestion();
+  }, [inTeachingPhase, student_id, activeKC, loadSequentialQuestion]);
+
+  React.useEffect(() => {
+    if (!questionStartTime || seqOutcome !== null || inTeachingPhase) {
       return;
     }
     setElapsedSeconds(0);
@@ -345,165 +426,18 @@ export default function Tutor() {
       setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
     }, 1000);
     return () => clearInterval(iv);
-  }, [questionStartTime, activeAttemptState.attempted, teachStep]);
+  }, [questionStartTime, seqOutcome, inTeachingPhase]);
 
-  // ── Sync persisted questionStates on load ─────────────────────────────────
-  React.useEffect(() => {
-    if (!questionStates || Object.keys(questionStates).length === 0) return;
-    setAttemptStateByQuestion((prev) => {
-      const next = { ...prev };
-      for (const [qid, state] of Object.entries(questionStates)) {
-        if (!next[qid]) {
-          next[qid] = {
-            attempted: state === "correct" || state === "incorrect",
-            correct: state === "correct" ? true : state === "incorrect" ? false : null,
-            skipped: state === "skipped",
-          };
-        }
-      }
-      return next;
-    });
-  }, [questionStates]);
+  const kc = activeKC;
 
-  const registerQuestion = React.useCallback(
-    (question, initialHintLevel = 0) => {
-      if (!question?.id) return;
-      setQuestionMap((prev) => ({ ...prev, [question.id]: question }));
-      setHintsByQuestion((prev) => {
-        if (prev[question.id]) return prev;
-        return { ...prev, [question.id]: { hintLevel: initialHintLevel, hintTexts: [] } };
-      });
-      setAttemptStateByQuestion((prev) => {
-        if (prev[question.id]) return prev;
-        const persisted = questionStates?.[question.id];
-        if (persisted) {
-          return {
-            ...prev,
-            [question.id]: {
-              attempted: persisted === "correct" || persisted === "incorrect",
-              correct: persisted === "correct" ? true : persisted === "incorrect" ? false : null,
-              skipped: persisted === "skipped",
-            },
-          };
-        }
-        return { ...prev, [question.id]: { attempted: false, correct: null } };
-      });
-      setActiveQuestionId(question.id);
-      setCurrentQuestion(question);
-      setQuestionStartTime(Date.now());
-    },
-    [setCurrentQuestion, questionStates]
-  );
-
-  const registerQuestionList = React.useCallback(
-    (questions) => {
-      const qMap = {};
-      for (const q of questions || []) {
-        if (!q?.id) continue;
-        qMap[q.id] = q;
-      }
-      setQuestionMap(qMap);
-      setHintsByQuestion((prev) => {
-        const next = { ...prev };
-        for (const q of questions || []) {
-          if (!next[q.id]) next[q.id] = { hintLevel: 0, hintTexts: [] };
-        }
-        return next;
-      });
-      setAttemptStateByQuestion((prev) => {
-        const next = { ...prev };
-        for (const q of questions || []) {
-          if (!next[q.id]) {
-            const persisted = questionStates?.[q.id];
-            if (persisted) {
-              next[q.id] = {
-                attempted: persisted === "correct" || persisted === "incorrect",
-                correct: persisted === "correct" ? true : persisted === "incorrect" ? false : null,
-                skipped: persisted === "skipped",
-              };
-            } else {
-              next[q.id] = { attempted: false, correct: null, skipped: false };
-            }
-          }
-        }
-        return next;
-      });
-    },
-    [questionStates]
-  );
-
-  const markCurrentAsSkipped = React.useCallback(() => {
-    if (!activeQuestionId) return;
-    const state = attemptStateByQuestion[activeQuestionId] || { attempted: false };
-    if (state.attempted || state.skipped) return;
-    setAttemptStateByQuestion((prev) => ({
-      ...prev,
-      [activeQuestionId]: { ...(prev[activeQuestionId] || {}), skipped: true },
-    }));
-    saveQuestionState(activeQuestionId, "skipped");
-  }, [activeQuestionId, attemptStateByQuestion, saveQuestionState]);
-
-  // ── Initial load ──────────────────────────────────────────────────────────
-  React.useEffect(() => {
-    Promise.all([fetchQuestionsList(), fetchLessons()]).then(([allQs]) => {
-      // Also fetch session queue for KC1
-      fetchSessionQueue("KC1").then((queue) => {
-        const qs = queue.length > 0 ? queue : (allQs || []).filter((q) => q.kc === "KC1");
-        registerQuestionList(qs);
-        if (qs.length > 0) registerQuestion(qs[0], 0);
-      });
-    });
-
-    // Set initial teach step based on whether KC1 lesson was already viewed
-    const isViewed = useTutorStore.getState().lessonsViewed.includes("KC1");
-    setTeachStep(isViewed ? null : "intro");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── When KC changes: load session queue + reset teaching phase ────────────
-  const prevKCRef = React.useRef(activeKC);
-  React.useEffect(() => {
-    if (prevKCRef.current === activeKC) return;
-    prevKCRef.current = activeKC;
-
-    // Reset teaching phase
-    const isViewed = lessonsViewed.includes(activeKC);
-    setTeachStep(isViewed ? null : "intro");
-
-    // Fetch session queue for new KC
-    fetchSessionQueue(activeKC).then((queue) => {
-      const qs = queue.length > 0 ? queue : allQuestions.filter((q) => q.kc === activeKC);
-      registerQuestionList(qs);
-      if (qs.length > 0) {
-        registerQuestion(qs[0], 0);
-      }
-    });
-  }, [activeKC, lessonsViewed, allQuestions, fetchSessionQueue, registerQuestion, registerQuestionList]);
-
-  const kc = activeQuestion?.kc;
-  const inTeachingPhase = teachStep !== null;
-
-  // ── Next question helper ──────────────────────────────────────────────────
-  function goToNext() {
-    if (!kcQuestionOrder.length) return;
-    markCurrentAsSkipped();
-    const currentIdx = Math.max(0, kcQuestionOrder.indexOf(activeQuestionId));
-    const nextIdx = (currentIdx + 1) % kcQuestionOrder.length;
-    const nextId = kcQuestionOrder[nextIdx];
-    const nextQ = questionMap[nextId];
-    if (nextQ) {
-      setActiveQuestionId(nextId);
-      setCurrentQuestion(nextQ);
-      setQuestionStartTime(Date.now());
-    }
-  }
+  const roundPct = seqProgress
+    ? Math.round((seqProgress.completedCorrectInRound / Math.max(1, seqProgress.total)) * 100)
+    : 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-8">
-
-        {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-indigo-700">Fractions Tutor</div>
@@ -511,39 +445,35 @@ export default function Tutor() {
               {KC_TITLES[activeKC] || (kc ? `Working on ${kc}` : "Adaptive practice")}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
               {name || "Student"}
             </div>
-            {/* Live timer */}
-            {!inTeachingPhase && !activeAttemptState.attempted && (
-              <div className={[
-                "rounded-xl border px-3 py-2 text-sm font-mono font-bold tabular-nums transition-colors",
-                elapsedSeconds > 45
-                  ? "border-rose-300 bg-rose-50 text-rose-700"
-                  : elapsedSeconds > 20
-                  ? "border-amber-300 bg-amber-50 text-amber-700"
-                  : "border-slate-200 bg-white text-slate-700",
-              ].join(" ")}>
-                ⏱ {formatTime(elapsedSeconds)}
+            {!inTeachingPhase && (
+              <div
+                className={[
+                  "rounded-xl border px-3 py-2 text-sm font-mono font-bold tabular-nums transition-colors",
+                  seqOutcome !== null
+                    ? "border-slate-200 bg-slate-50 text-slate-600"
+                    : elapsedSeconds > 45
+                      ? "border-rose-300 bg-rose-50 text-rose-700"
+                      : elapsedSeconds > 20
+                        ? "border-amber-300 bg-amber-50 text-amber-700"
+                        : "border-slate-200 bg-white text-slate-700",
+                ].join(" ")}
+                title="Time for this question only"
+              >
+                ⏱ {formatTime(frozenSeconds != null ? frozenSeconds : elapsedSeconds)}
               </div>
             )}
             <motion.button
               type="button"
               className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition"
-              whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => navigate("/profile")}
             >
               View Profile
-            </motion.button>
-            <motion.button
-              type="button"
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-40"
-              whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }}
-              onClick={goToNext}
-              disabled={status === "loading" || inTeachingPhase}
-            >
-              Next →
             </motion.button>
           </div>
         </div>
@@ -555,92 +485,52 @@ export default function Tutor() {
         ) : null}
 
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-12">
-
-          {/* Left Panel — Navigator */}
           <div className="lg:col-span-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 text-sm font-semibold text-slate-800">Question Navigator</div>
+              <div className="mb-3 text-sm font-semibold text-slate-800">Your path</div>
               <KCTabs
                 activeKC={activeKC}
                 allKCs={ALL_KCS}
                 kcTitles={KC_TITLES}
-                onSelect={(kc) => {
-                  markCurrentAsSkipped();
-                  setActiveKC(kc);
-                }}
+                onSelect={(nextKc) => setActiveKC(nextKc)}
               />
 
-              {/* KC Progress bar */}
-              <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                  <span>Progress</span>
-                  <span>{kcProgress}%</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${kcProgress}%` }}
-                    transition={{ duration: 0.5 }}
+              {!inTeachingPhase && seqProgress && (
+                <>
+                  <div className="mb-2 text-center text-sm font-bold text-slate-800">
+                    Question {seqProgress.number} of {seqProgress.total}
+                  </div>
+                  <ProgressiveQuestionRail
+                    currentNumber={seqProgress.number}
+                    total={seqProgress.total}
                   />
-                </div>
-              </div>
-
-              {/* Teaching phase indicator */}
-              {inTeachingPhase && (
-                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 font-semibold">
-                  📖 Complete the teaching phase to unlock questions
-                </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                      <span>Round progress (correct so far)</span>
+                      <span>{roundPct}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${roundPct}%` }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
 
-              {/* Question grid */}
-              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))" }}>
-                {kcQuestionOrder.map((qid, idx) => {
-                  const state = attemptStateByQuestion[qid] || { attempted: false, correct: null, skipped: false };
-                  const isActive = qid === activeQuestionId;
-                  const statusCls =
-                    !state.attempted && state.skipped ? "border-orange-300 bg-orange-100 text-orange-900"
-                    : !state.attempted ? "border-slate-200 bg-white text-slate-900"
-                    : state.correct ? "border-emerald-300 bg-emerald-100 text-emerald-900"
-                    : "border-rose-300 bg-rose-100 text-rose-900";
-
-                  return (
-                    <button
-                      key={qid}
-                      type="button"
-                      onClick={() => {
-                        if (inTeachingPhase) return;
-                        if (qid !== activeQuestionId) markCurrentAsSkipped();
-                        const q = questionMap[qid];
-                        setActiveQuestionId(qid);
-                        setCurrentQuestion(q);
-                        setQuestionStartTime(Date.now());
-                      }}
-                      className={[
-                        "w-full rounded-xl border px-2 py-2 text-left transition",
-                        statusCls,
-                        isActive ? "ring-2 ring-indigo-400" : "",
-                        inTeachingPhase ? "opacity-40 cursor-not-allowed" : "",
-                      ].join(" ")}
-                    >
-                      <div className="text-xs font-bold">Q{idx + 1}</div>
-                      <div className="mt-0.5 text-[11px] font-medium">
-                        {!state.attempted && state.skipped ? "Skipped"
-                          : !state.attempted ? "Unvisited"
-                          : state.correct ? "Correct"
-                          : "Wrong"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              {inTeachingPhase && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 font-semibold">
+                  Complete the lesson first — then you&apos;ll get 8 questions, one at a time.
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Center Panel */}
           <div className="lg:col-span-6">
             <AnimatePresence mode="wait">
-              {/* ── TEACHING PHASES ── */}
               {teachStep === "intro" && (
                 <TeachIntro
                   key={`intro-${activeKC}`}
@@ -669,7 +559,6 @@ export default function Tutor() {
                 />
               )}
 
-              {/* ── INDEPENDENT PRACTICE ── */}
               {teachStep === null && (
                 <motion.div
                   key={`practice-${activeKC}`}
@@ -677,120 +566,193 @@ export default function Tutor() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
-                  <QuestionCard
-                    question={activeQuestion}
-                    disabled={status === "loading" || Boolean(activeAttemptState.attempted)}
-                    selected_option={selectedByQuestion[activeQuestionId] ?? null}
-                    onSelectOption={async (opt) => {
-                      if (!activeQuestionId) return;
-                      if (activeAttemptState.attempted) return;
-                      const timeTaken = questionStartTime ? Date.now() - questionStartTime : null;
-                      setSelectedByQuestion((prev) => ({ ...prev, [activeQuestionId]: opt }));
-                      try {
-                        const data = await submitAnswerForQuestion(activeQuestionId, opt, timeTaken);
-                        setAttemptStateByQuestion((prev) => ({
-                          ...prev,
-                          [activeQuestionId]: { attempted: true, correct: data.correct, skipped: false },
-                        }));
-                        setFeedbackByQuestion((prev) => ({
-                          ...prev,
-                          [activeQuestionId]: {
-                            ...data.feedback,
-                            correct: data.correct,
-                            misconception: data.misconception,
-                            remediation: data.remediation || null,
-                            responseTimeFeedback: data.responseTimeFeedback || null,
-                          },
-                        }));
-                      } catch (e) { console.error(e); }
-                    }}
-                  />
+                  {seqMeta?.newRound ? (
+                    <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                      <span className="font-bold">New round.</span> The next 8 questions adapt to how you
+                      answered before — faster, accurate work tends to raise difficulty.
+                    </div>
+                  ) : null}
 
-                  <AnimatePresence mode="wait">
-                    {activeFeedback && (
-                      <motion.div
-                        key={`fb-${activeQuestionId}`}
-                        className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
+                  {seqLoading && !seqQuestion ? (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+                      Loading your question…
+                    </div>
+                  ) : null}
+
+                  {seqError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                      {seqError}
+                      <button
+                        type="button"
+                        className="mt-2 block text-sm font-bold text-rose-900 underline"
+                        onClick={() => loadSequentialQuestion()}
                       >
-                        <div className={["font-bold", activeFeedback.correct ? "text-emerald-700" : "text-rose-700"].join(" ")}>
-                          {activeFeedback.correct ? "✓ Correct!" : "✗ Not quite."}
-                        </div>
+                        Retry
+                      </button>
+                    </div>
+                  ) : null}
 
-                        {/* Response time feedback */}
-                        {activeFeedback.responseTimeFeedback && (
-                          <div className="mt-1 text-xs font-semibold text-slate-500">
-                            {activeFeedback.responseTimeFeedback}
-                          </div>
+                  {seqQuestion ? (
+                    <>
+                      <QuestionCard
+                        question={seqQuestion}
+                        disabled={
+                          status === "loading" ||
+                          seqLoading ||
+                          seqOutcome === "correct" ||
+                          seqOutcome === "wrong"
+                        }
+                        selected_option={seqSelected}
+                        onSelectOption={async (opt) => {
+                          if (!seqQuestionId || seqOutcome !== null) return;
+                          setSeqSelected(opt);
+                          const timeTaken = questionStartTime ? Date.now() - questionStartTime : null;
+                          try {
+                            const data = await submitAnswerForQuestion(seqQuestionId, opt, timeTaken);
+                            const secs =
+                              typeof timeTaken === "number" && timeTaken > 0
+                                ? Math.max(1, Math.round(timeTaken / 1000))
+                                : elapsedSeconds;
+                            setFrozenSeconds(secs);
+                            setSeqOutcome(data.correct ? "correct" : "wrong");
+                            setSeqFeedback({
+                              ...data.feedback,
+                              correct: data.correct,
+                              misconception: data.misconception,
+                              remediation: data.remediation || null,
+                              responseTimeFeedback: data.responseTimeFeedback || null,
+                            });
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }}
+                      />
+
+                      <AnimatePresence mode="wait">
+                        {seqFeedback && (
+                          <motion.div
+                            key={`fb-${seqQuestionId}`}
+                            className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                          >
+                            <div
+                              className={[
+                                "font-bold",
+                                seqFeedback.correct ? "text-emerald-700" : "text-rose-700",
+                              ].join(" ")}
+                            >
+                              {seqFeedback.correct ? "✓ Correct!" : "✗ Not quite."}
+                            </div>
+
+                            {seqFeedback.responseTimeFeedback && (
+                              <div className="mt-1 text-xs font-semibold text-slate-500">
+                                {seqFeedback.responseTimeFeedback}
+                              </div>
+                            )}
+
+                            <div className="mt-2 text-sm text-slate-700">{seqFeedback.message}</div>
+
+                            {seqFeedback.misconceptionLabel && (
+                              <div className="mt-2 text-xs font-semibold text-slate-600">
+                                Misconception: {seqFeedback.misconceptionLabel}
+                              </div>
+                            )}
+
+                            <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                              {seqFeedback.explanation}
+                            </div>
+
+                            <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
+                              <div className="font-semibold">What this means</div>
+                              <div className="mt-1">
+                                {seqFeedback.outcomeSummary || "Your attempt has been recorded."}
+                              </div>
+                              <div className="mt-2 font-semibold">What to do next</div>
+                              <div className="mt-1">{seqFeedback.nextStep}</div>
+                              <div className="mt-2 text-xs text-indigo-700">{seqFeedback.strategyTip}</div>
+                              {seqFeedback.masteryImpact && (
+                                <div className="mt-2 text-xs font-semibold text-indigo-800">
+                                  {seqFeedback.masteryImpact}
+                                </div>
+                              )}
+                            </div>
+
+                            {seqFeedback.remediation && (
+                              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                <div className="font-semibold">{seqFeedback.remediation.message}</div>
+                                <div className="mt-1">{seqFeedback.remediation.targetedExplanation}</div>
+                              </div>
+                            )}
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {seqOutcome === "wrong" && (
+                                <button
+                                  type="button"
+                                  className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-900 transition"
+                                  onClick={() => {
+                                    setSeqOutcome(null);
+                                    setSeqFeedback(null);
+                                    setSeqSelected(null);
+                                    setFrozenSeconds(null);
+                                    setQuestionStartTime(Date.now());
+                                    setHintLevel(0);
+                                    setHintTexts([]);
+                                  }}
+                                >
+                                  Try again
+                                </button>
+                              )}
+                              {seqOutcome === "correct" && (
+                                <button
+                                  type="button"
+                                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50"
+                                  disabled={seqLoading}
+                                  onClick={() => loadSequentialQuestion()}
+                                >
+                                  Next question →
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
                         )}
-
-                        <div className="mt-2 text-sm text-slate-700">{activeFeedback.message}</div>
-
-                        {activeFeedback.misconceptionLabel && (
-                          <div className="mt-2 text-xs font-semibold text-slate-600">
-                            Misconception: {activeFeedback.misconceptionLabel}
-                          </div>
-                        )}
-
-                        <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                          {activeFeedback.explanation}
-                        </div>
-
-                        <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
-                          <div className="font-semibold">What this means</div>
-                          <div className="mt-1">{activeFeedback.outcomeSummary || "Your attempt has been recorded."}</div>
-                          <div className="mt-2 font-semibold">What to do next</div>
-                          <div className="mt-1">{activeFeedback.nextStep || "Try the next question."}</div>
-                          <div className="mt-2 text-xs text-indigo-700">{activeFeedback.strategyTip}</div>
-                          {activeFeedback.masteryImpact && (
-                            <div className="mt-2 text-xs font-semibold text-indigo-800">{activeFeedback.masteryImpact}</div>
-                          )}
-                        </div>
-
-                        {activeFeedback.remediation && (
-                          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                            <div className="font-semibold">{activeFeedback.remediation.message}</div>
-                            <div className="mt-1">{activeFeedback.remediation.targetedExplanation}</div>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                      </AnimatePresence>
+                    </>
+                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Right Panel — Hints + KC Mastery */}
           <div className="lg:col-span-3 space-y-4">
-            {teachStep === null && (
+            {teachStep === null && seqQuestionId && seqOutcome !== "correct" && (
               <HintBox
-                hintTexts={activeHintState.hintTexts}
-                hintLevel={activeHintState.hintLevel}
+                hintTexts={hintTexts}
+                hintLevel={hintLevel}
                 loading={hintLoading}
                 error={hintError}
                 maxHints={3}
                 onRequestHint={async () => {
-                  if (!activeQuestionId || inTeachingPhase) return;
-                  setHintLoading(true); setHintError(null);
+                  if (!seqQuestionId || seqOutcome === "correct") return;
+                  setHintLoading(true);
+                  setHintError(null);
                   try {
-                    const data = await requestHintForQuestion(activeQuestionId);
-                    setHintsByQuestion((prev) => {
-                      const cur = prev[activeQuestionId] || { hintLevel: 0, hintTexts: [] };
-                      const texts = [...cur.hintTexts];
-                      texts[data.hintLevel - 1] = data.hintText;
-                      return { ...prev, [activeQuestionId]: { hintLevel: data.hintLevel, hintTexts: texts } };
-                    });
+                    const data = await requestHintForQuestion(seqQuestionId);
+                    const level = data.hintLevel ?? 1;
+                    const texts = [...hintTexts];
+                    texts[level - 1] = data.hintText;
+                    setHintLevel(level);
+                    setHintTexts(texts);
                   } catch (e) {
                     setHintError(e.message || "Could not load hint.");
-                  } finally { setHintLoading(false); }
+                  } finally {
+                    setHintLoading(false);
+                  }
                 }}
               />
             )}
 
-            {/* KC Mastery panel */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="text-sm font-semibold text-slate-800">Your KC Mastery</div>
               <div className="mt-3 space-y-2">
@@ -819,7 +781,6 @@ export default function Tutor() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

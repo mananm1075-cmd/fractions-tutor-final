@@ -9,7 +9,13 @@ export default function Dashboard() {
   const student_id = useTutorStore((s) => s.student_id);
   const name = useTutorStore((s) => s.name);
   const mastery = useTutorStore((s) => s.mastery);
+  const profile = useTutorStore((s) => s.profile);
   const fetchProgress = useTutorStore((s) => s.fetchProgress);
+
+  const chartByKc = React.useMemo(() => {
+    const rows = profile?.chart || [];
+    return Object.fromEntries(rows.map((r) => [r.kc, r]));
+  }, [profile?.chart]);
 
   React.useEffect(() => {
     if (student_id) fetchProgress();
@@ -48,7 +54,14 @@ export default function Dashboard() {
 
         <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {["KC1", "KC2", "KC3", "KC4", "KC5", "KC6", "KC7"].map((kc) => (
-            <ProgressBar key={kc} kc={kc} mastery={mastery?.[kc] ?? 0} />
+            <ProgressBar
+              key={kc}
+              kc={kc}
+              mastery={mastery?.[kc] ?? 0}
+              avgProgressScore={
+                (chartByKc[kc]?.attempts ?? 0) > 0 ? chartByKc[kc]?.avgProgressScore : undefined
+              }
+            />
           ))}
         </div>
       </div>
