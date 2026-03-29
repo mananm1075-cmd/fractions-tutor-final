@@ -628,7 +628,7 @@
         "hintLevel": 0,
         "hintsUsed": 0,
         "attempts": 0,
-        "startedAt": 1774681390923
+        "startedAt": 1774776935359
       },
       "history": [
         {
@@ -856,7 +856,7 @@
         "KC1_Q11": "correct"
       },
       "metrics": {
-        "session_start_time": 1774681152971,
+        "session_start_time": 1774776934822,
         "session_end_time": null,
         "time_taken_per_question": {
           "KC1_Q1": 5030,
@@ -902,6 +902,158 @@
             "KC1_Q7",
             "KC1_Q11"
           ]
+        }
+      }
+    },
+    "dc2d25f0-5182-49ad-b921-89a9157532a2": {
+      "id": "dc2d25f0-5182-49ad-b921-89a9157532a2",
+      "name": "Rashmi12",
+      "createdAt": 1774776942421,
+      "mastery": {
+        "KC1": 42,
+        "KC2": 0,
+        "KC3": 0,
+        "KC4": 0,
+        "KC5": 0,
+        "KC6": 0,
+        "KC7": 0
+      },
+      "current": {
+        "question_id": "KC2_Q1",
+        "hintLevel": 0,
+        "hintsUsed": 0,
+        "attempts": 0,
+        "startedAt": 1774777016244
+      },
+      "history": [
+        {
+          "timestamp": 1774776953121,
+          "question_id": "KC1_Q1",
+          "kc": "KC1",
+          "selected_option": "1/2",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 42,
+            "KC2": 0,
+            "KC3": 0,
+            "KC4": 0,
+            "KC5": 0,
+            "KC6": 0,
+            "KC7": 0
+          },
+          "time_taken": 2444
+        },
+        {
+          "timestamp": 1774776963622,
+          "question_id": "KC1_Q14",
+          "kc": "KC1",
+          "selected_option": "1/4",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 42,
+            "KC2": 0,
+            "KC3": 0,
+            "KC4": 0,
+            "KC5": 0,
+            "KC6": 0,
+            "KC7": 0
+          },
+          "time_taken": 9006
+        },
+        {
+          "timestamp": 1774776977162,
+          "question_id": "KC1_Q15",
+          "kc": "KC1",
+          "selected_option": "4/10",
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 42,
+            "KC2": 0,
+            "KC3": 0,
+            "KC4": 0,
+            "KC5": 0,
+            "KC6": 0,
+            "KC7": 0
+          },
+          "time_taken": 8864
+        },
+        {
+          "timestamp": 1774776991348,
+          "question_id": "KC1_Q16",
+          "kc": "KC1",
+          "selected_option": [
+            "3 out of 8 equal parts selected",
+            "Denominator is 8",
+            "Numerator is 3"
+          ],
+          "correct": true,
+          "misconception": null,
+          "hints_used": 0,
+          "attempts": 1,
+          "updated_mastery": {
+            "KC1": 42,
+            "KC2": 0,
+            "KC3": 0,
+            "KC4": 0,
+            "KC5": 0,
+            "KC6": 0,
+            "KC7": 0
+          },
+          "time_taken": 10779
+        }
+      ],
+      "remediation": null,
+      "questionStates": {
+        "KC1_Q1": "correct",
+        "KC1_Q14": "correct",
+        "KC1_Q15": "correct",
+        "KC1_Q16": "correct"
+      },
+      "metrics": {
+        "session_start_time": 1774776942421,
+        "session_end_time": null,
+        "time_taken_per_question": {
+          "KC1_Q1": 2444,
+          "KC1_Q14": 9006,
+          "KC1_Q15": 8864,
+          "KC1_Q16": 10779
+        },
+        "question_timestamp": {
+          "KC1_Q1": 1774776953121,
+          "KC1_Q14": 1774776963622,
+          "KC1_Q15": 1774776977162,
+          "KC1_Q16": 1774776991348
+        },
+        "misconception_frequency": {
+          "F001": 0,
+          "F002": 0,
+          "F003": 0,
+          "F004": 0
+        }
+      },
+      "lessonsViewed": [
+        "KC1"
+      ],
+      "sessionQueues": {},
+      "kcRound": {
+        "KC1": {
+          "completedCorrectIds": [
+            "KC1_Q14",
+            "KC1_Q15",
+            "KC1_Q16"
+          ]
+        },
+        "KC2": {
+          "completedCorrectIds": []
         }
       }
     }
