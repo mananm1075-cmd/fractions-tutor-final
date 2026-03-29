@@ -1,12 +1,15 @@
-const DEFAULT_API_BASE = "http://localhost:5000";
+function getApiBaseUrl() {
+  // If running locally → use localhost backend
+  if (import.meta.env.DEV) {
+    return "http://localhost:5000";
+  }
 
-export function getApiBaseUrl() {
-  // Vite exposes env vars prefixed with VITE_
-  return import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE;
+  // If deployed → use same origin (Render)
+  return "";
 }
 
 export async function apiFetch(path, { method = "GET", body } = {}) {
-  const url = `${getApiBaseUrl()}${path}`;
+  const url = `${getApiBaseUrl()}/api${path}`;
 
   const res = await fetch(url, {
     method,
@@ -15,6 +18,7 @@ export async function apiFetch(path, { method = "GET", body } = {}) {
   });
 
   const text = await res.text();
+
   let json;
   try {
     json = text ? JSON.parse(text) : null;
@@ -34,4 +38,3 @@ export const api = {
   get: (path) => apiFetch(path),
   post: (path, body) => apiFetch(path, { method: "POST", body }),
 };
-
